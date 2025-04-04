@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Stroke Prediction Chatbot</title>
+  <style>
+    body {
+      font-family: Arial;
+      background: #f0f2f5;
+      margin: 0;
+      padding: 20px;
+    }
+    #chatbox {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      height: 600px;
+      overflow-y: auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .bot, .user {
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 15px;
+      max-width: 80%;
+      display: inline-block;
+      clear: both;
+    }
+    .bot {
+      background: #eee;
+      float: left;
+    }
+    .user {
+      background: #4caf50;
+      color: white;
+      float: right;
+    }
+    #input-area {
+      display: flex;
+      margin-top: 10px;
+      justify-content: center;
+      gap: 10px;
+    }
+    #input-area input {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+    }
+    #input-area button {
+      padding: 10px 15px;
+      font-size: 16px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="chatbox">
+    <div class="bot">Hi! I’m your Stroke Prediction Assistant 🤖<br>Let’s check your health risk. First, what's your age?</div>
+  </div>
+
+  <div id="input-area">
+    <input type="text" id="userInput" placeholder="Type here..." />
+    <button onclick="handleUserInput()">Send</button>
+    <button onclick="startVoiceInput()">🎙️ Speak</button>
+  </div>
+
+  <script>
+    const questions = [
+      { key: "age", question: "What is your age?" },
+      { key: "hypertension", question: "Do you have hypertension? (0 = No, 1 = Yes)" },
+      { key: "heart_disease", question: "Do you have heart disease? (0 = No, 1 = Yes)" },
+      { key: "avg_glucose_level", question: "Enter your average glucose level:" },
+      { key: "bmi", question: "Enter your BMI:" },
+      { key: "gender_Male", question: "Gender? (Male or Female)" },
+      { key: "ever_married_Yes", question: "Have you ever been married? (Yes or No)" },
+      { key: "work_type_Private", question: "Work type? (Private / Self-employed / children)" },
+      { key: "Residence_type_Urban", question: "Do you live in an Urban area? (Yes or No)" },
+      { key: "smoking_status_formerly smoked", question: "Smoking status? (never smoked / formerly smoked / smokes)" }
+    ];
+
+    let currentQuestion = 0;
+    let answers = {};
+
+    function addMessage(msg, sender) {
+      const div = document.createElement("div");
+      div.className = sender;
+      div.innerHTML = msg;
+      document.getElementById("chatbox").appendChild(div);
+      document.getElementById("chatbox").scrollTop = chatbox.scrollHeight;
+      if (sender === "bot") speakBotResponse(msg);
+    }
+
+    function handleUserInput() {
+      const input = document.getElementById("userInput");
+      const value = input.value.trim();
+      if (value === "") return;
+      addMessage(value, "user");
+
+      const qKey = questions[currentQuestion].key;
+
+      if (qKey === "gender_Male") answers[qKey] = (value.toLowerCase() === "male") ? 1 : 0;
+      else if (qKey === "ever_married_Yes") answers[qKey] = (value.toLowerCase() === "yes") ? 1 : 0;
+      else if (qKey === "Residence_type_Urban") answers[qKey] = (value.toLowerCase() === "yes") ? 1 : 0;
+      else if (qKey === "work_type_Private") {
+        answers["work_type_Private"] = (value.toLowerCase() === "private") ? 1 : 0;
+        answers["work_type_Self-employed"] = (value.toLowerCase() === "self-employed") ? 1 : 0;
+        answers["work_type_children"] = (value.toLowerCase() === "children") ? 1 : 0;
+      }
+      else if (qKey === "smoking_status_formerly smoked") {
+        answers["smoking_status_formerly smoked"] = (value.toLowerCase() === "formerly smoked") ? 1 : 0;
+        answers["smoking_status_never smoked"] = (value.toLowerCase() === "never smoked") ? 1 : 0;
+        answers["smoking_status_smokes"] = (value.toLowerCase() === "smokes") ? 1 : 0;
+      }
+      else {
+        answers[qKey] = isNaN(value) ? 0 : parseFloat(value);
+      }
+
+      currentQuestion++;
+      input.value = "";
+
+      if (currentQuestion < questions.length) {
+        setTimeout(() => addMessage(questions[currentQuestion].question, "bot"), 500);
+      } else {
+        addMessage("Thanks! Getting your results...", "bot");
+        submitToAPI();
+      }
+    }
+
+    function submitToAPI() {
+      fetch('http://127.0.0.1:5000/predict', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(answers)
+      })
+      .then(response => response.json())
+      .then(data => {
+        setTimeout(() => {
+          const result = `🧠 Prediction: ${data.prediction}`;
+          addMessage(result, "bot");
+          speakBotResponse(data.prediction);
+        }, 1000);
+      })
+      .catch(error => {
+        addMessage("❌ Error: Unable to connect to the API.", "bot");
+        console.error("API Error:", error);
+      });
+    }
+
+    // VOICE OUTPUT: Text-to-Speech
+    function speakBotResponse(message) {
+      const utterance = new SpeechSynthesisUtterance(message);
+      utterance.lang = "en-US";
+      utterance.rate = 1;
+      speechSynthesis.speak(utterance);
+    }
+
+    // VOICE INPUT: Speech-to-Text
+    function startVoiceInput() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Sorry, your browser doesn't support speech recognition.");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.start();
+
+      recognition.onresult = function(event) {
+        const voiceText = event.results[0][0].transcript;
+        document.getElementById("userInput").value = voiceText;
+        handleUserInput();
+      };
+
+      recognition.onerror = function(event) {
+        addMessage("❌ Sorry, I couldn't hear you.", "bot");
+      };
+    }
+  </script>
+</body>
+</html>
